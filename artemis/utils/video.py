@@ -625,6 +625,13 @@ async def render_timeline_clip(
             ";".join(filter_parts),
             "-map",
             "[outv]",
+            # Pin the output rate. The per-segment filter chains set fps, but
+            # without -r ffmpeg picks its own default (25) for the muxed
+            # output and duplicates frames to keep wall-clock duration. That
+            # silently breaks the frame_index / fps -> recording-time mapping
+            # this function exists to guarantee.
+            "-r",
+            str(fps),
             "-c:v",
             "libx264",
             "-preset",

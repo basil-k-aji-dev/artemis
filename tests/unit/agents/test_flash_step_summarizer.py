@@ -31,6 +31,11 @@ from artemis.context import ArtemisContext
 from artemis.sdk.builders import Builders
 
 
+@pytest.fixture(autouse=True)
+def _isolate_summarizer_model_factories(stub_summarizer_model_factories):
+    """Keep this module runnable without provider credentials (see conftest)."""
+
+
 @pytest.fixture
 def mock_context():
     ctx = Mock(spec=ArtemisContext)
@@ -840,7 +845,7 @@ def test_flash_config_and_builder():
         step_summarizer=True,
         step_summarizer_model="gemini-2.5-flash-lite",
         prune_history_xml=True,
-    ).build()
+    ).build(validate_profiles=False)
 
     assert cfg.flash.max_turns == 25
     assert cfg.flash.explorer_mode == "flash"

@@ -56,6 +56,11 @@ FAILED_RESULT_RE = re.compile(
 )
 
 
+@pytest.fixture(autouse=True)
+def _isolate_summarizer_model_factories(stub_summarizer_model_factories):
+    """Keep this module runnable without provider credentials (see conftest)."""
+
+
 @pytest.fixture
 def mock_context():
     ctx = Mock(spec=ArtemisContext)

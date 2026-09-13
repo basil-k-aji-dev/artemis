@@ -1061,12 +1061,22 @@ def _resolve_endpoint(
         val = getattr(obj, attr, None)
         return val if isinstance(val, expected_type) else None
 
-    provider_val = getattr(cfg, "provider", "google")
-    model_val = getattr(cfg, "model", "gemini-2.5-flash")
+    # Type-check these two the way every other field below is. A bare getattr
+    # hands `ModelProvider.from_string` whatever the attribute holds, so a
+    # config object carrying a non-string provider raises "Unknown LLM
+    # provider" instead of falling back. `ModelProvider` is a StrEnum, so a
+    # real enum value still passes the `str` check, and a genuinely
+    # misspelled provider string still reaches `from_string` and still
+    # raises -- silently routing a typo to Gemini with the wrong credentials
+    # is deliberately not a behaviour this restores.
+    provider_val = _get_val(cfg, "provider", str)
+    model_val = _get_val(cfg, "model", str)
 
     return ModelEndpoint(
+        # `from_string` maps None to the Google default, so the fallback lives
+        # in one place rather than being repeated here.
         provider=ModelProvider.from_string(provider_val),
-        model_name=str(model_val),
+        model_name=model_val or "gemini-2.5-flash",
         temperature=_get_val(cfg, "temperature", (int, float)) or 0.0,
         timeout_seconds=_get_val(cfg, "timeout", (int, float)) or 60.0,
         thinking_budget=_get_val(cfg, "thinking_budget", int),

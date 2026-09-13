@@ -204,6 +204,39 @@ async def list_devices():
     return {"devices": [d.to_dict() for d in devices]}
 
 
+#: Body values accepted for the `all` flag of `POST /api/stop`. `bool()` is not
+#: usable there: every non-empty string is truthy, so a client that spells out
+#: `"false"` would ask for a global cancellation.
+_TRUE_LIKE_FLAGS = frozenset({"true", "t", "yes", "y", "on", "1"})
+_FALSE_LIKE_FLAGS = frozenset({"false", "f", "no", "n", "off", "0"})
+
+
+def _coerce_stop_all(value: Any) -> bool:
+    """Normalize the JSON body's `all` flag, rejecting anything ambiguous.
+
+    Rejection happens before any task is stopped, so an unrecognized value can
+    never fall back to cancelling everything.
+    """
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in (0, 1):
+            return bool(value)
+    elif isinstance(value, str):
+        token = value.strip().lower()
+        if token in _TRUE_LIKE_FLAGS:
+            return True
+        if token in _FALSE_LIKE_FLAGS:
+            return False
+    raise HTTPException(
+        status_code=422,
+        detail=(
+            "Field 'all' must be a boolean. Accepted values: true/false, 1/0, "
+            f"yes/no, on/off. Received: {value!r}."
+        ),
+    )
+
+
 @router.post("/api/stop")
 async def stop_task(
     request: Request,
@@ -218,8 +251,10 @@ async def stop_task(
     try:
         body = await request.json()
         if isinstance(body, dict):
-            if "all" in body:
-                target_all = bool(body["all"]) or target_all
+            if "all" in body and body["all"] is not None:
+                # `or target_all` keeps an explicit `?all=true` in the query
+                # string authoritative, as it was before.
+                target_all = _coerce_stop_all(body["all"]) or target_all
             if body.get("session_id"):
                 target_sid = str(body["session_id"])
             if body.get("device_id"):

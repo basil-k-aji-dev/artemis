@@ -370,10 +370,22 @@ async def test_mobile_get_device_state_hierarchy_without_ocr():
 
 
 @pytest.mark.asyncio
-async def test_mobile_inspect_trace_invalid_action():
+async def test_mobile_inspect_trace_invalid_action(temp_trace_env):
+    # mobile_inspect_trace returns "Database not found" before it looks at
+    # `action` at all, and falls back to <project_root>/traces/data_engine.db
+    # when the configured traces dir has none. Without an isolated directory
+    # holding its own database, this test reports whatever that fallback path
+    # happens to contain: it passes on a machine with a leftover database and
+    # fails on a clean checkout, in neither case reaching the branch it names.
+    # An unknown action never reads the database, so an empty file is enough.
+    db_path = os.path.join(temp_trace_env, "data_engine.db")
+    open(db_path, "wb").close()
+
     res = await mobile_inspect_trace(action="invalid_action", trace_id="trace-123")
+
     assert "error" in res
     assert "not supported" in res["message"]
+    assert "invalid_action" in res["message"]
 
 
 @pytest.mark.asyncio

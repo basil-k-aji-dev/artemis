@@ -383,8 +383,19 @@ class AndroidAdbDriver(BaseDeviceDriver):
             return False
 
     async def launch_app(self, package_name: str) -> bool:
+        # The argv form is not cosmetic: adbutils joins the list with
+        # shlex.quote, so the package name reaches the device's shell as one
+        # word. Interpolating it into a command string instead lets any shell
+        # metacharacter in a caller-supplied name run on the device.
         try:
-            cmd = f"monkey -p {package_name} -c android.intent.category.LAUNCHER 1"
+            cmd = [
+                "monkey",
+                "-p",
+                package_name,
+                "-c",
+                "android.intent.category.LAUNCHER",
+                "1",
+            ]
             await asyncio.to_thread(self.device.shell, cmd)
             return True
         except Exception as e:
@@ -393,7 +404,7 @@ class AndroidAdbDriver(BaseDeviceDriver):
 
     async def stop_app(self, package_name: str) -> bool:
         try:
-            await asyncio.to_thread(self.device.shell, f"am force-stop {package_name}")
+            await asyncio.to_thread(self.device.shell, ["am", "force-stop", package_name])
             return True
         except Exception as e:
             logger.error(f"Stop app failed for '{package_name}': {e}")

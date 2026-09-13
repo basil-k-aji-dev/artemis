@@ -198,3 +198,74 @@ async def test_find_element_prefers_fresh_bounds_over_stale_center():
 
     assert error is None
     assert center == [140, 1820]
+
+
+@pytest.mark.asyncio
+async def test_android_driver_app_commands_cannot_inject_device_shell():
+    """A package name carrying shell metacharacters must stay a single word.
+
+    ``adbutils`` joins an argv list with ``shlex.quote``, so asserting on the
+    joined form is asserting on exactly what the device's shell receives.
+    """
+    import shlex
+
+    mock_adb_client = MagicMock()
+    mock_adb_device = MagicMock()
+    mock_adb_client.device.return_value = mock_adb_device
+
+    driver = AndroidAdbDriver(
+        device_id="emulator-5554",
+        adb_client=mock_adb_client,
+        width=1080,
+        height=2400,
+    )
+
+    hostile = "com.android.settings; reboot"
+
+    assert await driver.launch_app(hostile) is True
+    argv = mock_adb_device.shell.call_args.args[0]
+    assert isinstance(argv, (list, tuple))
+    assert hostile in argv
+    rendered = " ".join(shlex.quote(part) for part in argv)
+    assert "; reboot" not in rendered.replace(shlex.quote(hostile), "")
+    assert rendered == (
+        "monkey -p 'com.android.settings; reboot' -c android.intent.category.LAUNCHER 1"
+    )
+
+    mock_adb_device.reset_mock()
+
+    assert await driver.stop_app(hostile) is True
+    argv = mock_adb_device.shell.call_args.args[0]
+    assert isinstance(argv, (list, tuple))
+    assert " ".join(shlex.quote(part) for part in argv) == (
+        "am force-stop 'com.android.settings; reboot'"
+    )
+
+
+@pytest.mark.asyncio
+async def test_android_driver_app_commands_keep_ordinary_package_names_verbatim():
+    """A normal package name must produce the same command as before."""
+    import shlex
+
+    mock_adb_client = MagicMock()
+    mock_adb_device = MagicMock()
+    mock_adb_client.device.return_value = mock_adb_device
+
+    driver = AndroidAdbDriver(
+        device_id="emulator-5554",
+        adb_client=mock_adb_client,
+        width=1080,
+        height=2400,
+    )
+
+    await driver.launch_app("com.android.settings")
+    argv = mock_adb_device.shell.call_args.args[0]
+    assert " ".join(shlex.quote(part) for part in argv) == (
+        "monkey -p com.android.settings -c android.intent.category.LAUNCHER 1"
+    )
+
+    mock_adb_device.reset_mock()
+
+    await driver.stop_app("com.android.settings")
+    argv = mock_adb_device.shell.call_args.args[0]
+    assert " ".join(shlex.quote(part) for part in argv) == "am force-stop com.android.settings"

@@ -100,7 +100,15 @@ def mock_context():
 
 
 def _runner(mock_context, observations):
-    with patch("artemis.controllers.unified_controller.get_driver"):
+    # FlashRunner.__init__ builds a VisualStepSummarizer, whose constructor
+    # resolves a real model client and raises without GOOGLE_API_KEY. Setting
+    # `runner.summarizer = None` below is too late -- the object is already
+    # built by then -- so the class is patched for the construction itself.
+    # These tests never summarize anything; they assert index resolution.
+    with (
+        patch("artemis.controllers.unified_controller.get_driver"),
+        patch("artemis.agents.flash.runner.VisualStepSummarizer"),
+    ):
         runner = FlashRunner(mock_context, goal="Open Wi-Fi and Display")
     runner.summarizer = None
     runner.executor._session = _FakeSession(observations)
